@@ -1,3 +1,5 @@
+### Telegram chat-bot for openAI
+
 #### Environment variables
 
 Stored inside `.env` file in the root folder.
@@ -30,4 +32,11 @@ deno --version
 ```bash
 deno cache --lock=lock.json chatbot.ts
 deno run --allow-read --allow-env --allow-net chatbot.ts
+```
+
+#### Automation
+```bash
+pm2 start chatbot.ts --interpreter="deno" --interpreter-args="run -allow-read --allow-env --allow-net" --name "dustie-chatbot"
+# or
+pm2 start ./run.sh --name "dustie-chatbot"
 ```

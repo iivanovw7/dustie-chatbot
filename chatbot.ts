@@ -8,13 +8,7 @@ import "https://deno.land/x/dotenv@v3.2.0/load.ts";
 
 import { testBot } from "./service/testBot.ts"
 import { log } from "./shared/utils.ts";
-import {
-    CHAT_MESSAGES,
-    Commands,
-    CONTROLS,
-    LOG_MESSAGES,
-    THROTTLE_DELAY
-} from "./shared/constants.ts";
+import { CHAT_MESSAGES, Commands, CONTROLS, LOG_MESSAGES, THROTTLE_DELAY } from "./shared/constants.ts";
 
 const TOKEN = Deno.env.get("TOKEN");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -69,8 +63,8 @@ const editMessage = async (msg: TelegramBot.Message, text: string, withParsing =
         })
 
         return _.isObject(response)
-                ? response as TelegramBot.Message
-                : msg
+            ? response as TelegramBot.Message
+            : msg
     }
     catch (err) {
         log(LOG_MESSAGES.editMessageError, err.message);
@@ -190,8 +184,8 @@ const handleMessage = async (msg: TelegramBot.Message) => {
         log(LOG_MESSAGES.error, message);
 
         bot.sendMessage(chatId, message.includes("session token may have expired")
-                ? CHAT_MESSAGES.expiredToken
-                : CHAT_MESSAGES.unknownError
+            ? CHAT_MESSAGES.expiredToken
+            : CHAT_MESSAGES.unknownError
         )
     }
 }

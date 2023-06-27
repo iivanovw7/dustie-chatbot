@@ -36,10 +36,10 @@ export type Commands = typeof Commands[keyof typeof Commands];
 export const CONTROLS = {
     reply_markup: JSON.stringify({
         keyboard: [
-            [{text: Commands.START}],
-            [{text: Commands.TEST}],
-            [{text: Commands.RELOAD}],
-            [{text: Commands.HELP}],
+            [{ text: Commands.START }],
+            [{ text: Commands.TEST }],
+            [{ text: Commands.RELOAD }],
+            [{ text: Commands.HELP }],
         ]
     })
 };

@@ -3,6 +3,7 @@
 #### Environment variables
 
 Stored inside `.env` file in the root folder.
+
 ```dotenv
 TOKEN=XXX
 OPENAI_API_KEY=XXX
@@ -29,12 +30,14 @@ deno --version
 ```
 
 #### Usage
+
 ```bash
 deno cache --lock=lock.json chatbot.ts
 deno run --allow-read --allow-env --allow-net chatbot.ts
 ```
 
 #### Automation
+
 ```bash
 pm2 start chatbot.ts --interpreter="deno" --interpreter-args="run -allow-read --allow-env --allow-net" --name "dustie-chatbot"
 # or

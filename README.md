@@ -1,8 +1,21 @@
-### Telegram chat-bot for openAI
+## Telegram chatbot for openAI
 
-#### Environment variables
+Chatbot powered by ChatGPT
 
-Stored inside `.env` file in the root folder.
+---
+
+### Table of Contents
+
+- [Environment variables](#environment)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Automation](#automation)
+
+---
+
+### Environment
+
+Environment variables are stored inside `.env` file in the root folder.
 
 ```dotenv
 TOKEN=XXX
@@ -11,11 +24,16 @@ CHAT_ID=9999
 CHAT_ID_VERIFICATION=true
 ```
 
-#### Installation
+---
+
+### Installation
+
+Install [Deno](https://deno.land/).
 
 ```bash
+# arch based
 pacman -Sy deno
-# or
+# or debian
 cd /tmp
 curl -Lo "deno.zip" "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"
 
@@ -29,14 +47,26 @@ deno --version
 # example output: deno 1.13.2 (release, x86_64-unknown-linux-gnu)
 ```
 
-#### Usage
+---
+
+### Usage
+1. Setup environment.
+2. Fill required `.env` data.
+3. Cache dependencies.
+4. Execute `chatbot`.
 
 ```bash
+# Cache dependencies and check integrity
 deno cache --lock=lock.json chatbot.ts
+# Run chatbot
 deno run --allow-read --allow-env --allow-net chatbot.ts
 ```
 
-#### Automation
+---
+
+### Automation
+
+Running with `pm2`.
 
 ```bash
 pm2 start chatbot.ts --interpreter="deno" --interpreter-args="run -allow-read --allow-env --allow-net" --name "dustie-chatbot"

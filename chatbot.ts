@@ -1,14 +1,24 @@
 import _ from "npm:lodash@4.17.15";
-import { ChatGPTAPI, ChatMessage } from "npm:chatgpt@5.0.6";
+import { ChatGPTAPI, ChatMessage } from "npm:chatgpt@5.2.5";
 
-// @deno-types="npm:@types/node-telegram-bot-api@^0.57.6";
+// @deno-types="npm:@types/node-telegram-bot-api@0.61.6";
 import TelegramBot from "npm:node-telegram-bot-api@0.61.0";
 
 import "https://deno.land/x/dotenv@v3.2.0/load.ts";
 
 import { testBot } from "./service/testBot.ts"
-import { log } from "./shared/utils.ts";
-import { CHAT_MESSAGES, Commands, CONTROLS, LOG_MESSAGES, THROTTLE_DELAY } from "./shared/constants.ts";
+import { isBotNameMessage, log, trimMessage } from "./shared/utils.ts";
+import {
+    CHAT_GPT_MODEL,
+    CHAT_MESSAGES,
+    Commands,
+    CONTROLS,
+    LOG_MESSAGES,
+    TelegramActions,
+    THROTTLE_DELAY
+} from "./shared/constants.ts";
+
+const { throttle, isObject } = _;
 
 const TOKEN = Deno.env.get("TOKEN");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -25,33 +35,50 @@ const botInfo = await bot.getMe();
 const botName = botInfo.username || "";
 
 let chatGPTAPI: ChatGPTAPI;
-let conversationID: string | null = null;
-let parentMessageID: string | null = null;
+let conversationId: string | null = null;
+let parentMessageId: string | null = null;
 
 try {
-    chatGPTAPI = new ChatGPTAPI({ apiKey: OPENAI_API_KEY });
+    chatGPTAPI = new ChatGPTAPI({
+        apiKey: OPENAI_API_KEY,
+        completionParams: {
+            model: CHAT_GPT_MODEL,
+        }
+    });
 }
 catch (err) {
-    log(MESSAGES.chatGptError, err.message);
+    log(LOG_MESSAGES.chatGptError, err.message);
     Deno.exit(1);
 }
 
 log(LOG_MESSAGES.startup);
 
-bot.on("message", async (msg) => {
-    await handleMessage(msg)
+bot.on("message", async (chatMessage: TelegramBot.Message) => {
+    await handleMessage(chatMessage)
 });
 
-const editMessage = async (msg: TelegramBot.Message, text: string, withParsing = true) => {
+type TEditMessageParams = {
+    chatMessage: TelegramBot.Message;
+    text: string;
+    withParsing?: boolean
+}
+
+const editMessage = async (params: TEditMessageParams) => {
+    const {
+        chatMessage,
+        text,
+        withParsing
+    } = params;
+
     const {
         chat: {
             id: chatId,
         },
         message_id: messageId,
         text: messageText
-    } = msg;
+    } = chatMessage;
 
-    if (messageText === text || ! text || text.trim() === "") return msg;
+    if (messageText === text || ! text || text.trim() === "") return chatMessage;
 
     try {
         const response = await bot.editMessageText(text, {
@@ -62,52 +89,48 @@ const editMessage = async (msg: TelegramBot.Message, text: string, withParsing =
             })
         })
 
-        return _.isObject(response)
+        return isObject(response)
             ? response as TelegramBot.Message
-            : msg
+            : chatMessage
     }
     catch (err) {
         log(LOG_MESSAGES.editMessageError, err.message);
-        return msg;
+        return chatMessage;
     }
 }
 
-const handleCommand = async (msg: TelegramBot.Message) => {
+const handleCommand = async (chatMessage: TelegramBot.Message) => {
     const {
         chat: {
             id: chatId,
         },
-    } = msg;
+        text: chatMessageText
+    } = chatMessage;
 
-    const trimmedText = msg.text?.replace(`@${botName}`, "").trim()
+    const trimmedText = trimMessage(botName, chatMessageText);
 
     const send = (message: string) => {
         bot.sendMessage(chatId, message, CONTROLS);
+
+        return true;
     }
 
     switch (trimmedText) {
         case Commands.START: {
-            send(CHAT_MESSAGES.startup);
-
-            return true;
+            return send(CHAT_MESSAGES.startup);
         }
         case Commands.RELOAD:
         case Commands.RESET: {
-            conversationID = null;
-            parentMessageID = null;
-            log(LOG_MESSAGES.reset);
-            send(CHAT_MESSAGES.reset);
+            conversationId = null;
+            parentMessageId = null;
 
-            return true;
+            return send(CHAT_MESSAGES.reset);
         }
         case Commands.HELP: {
-            send(CHAT_MESSAGES.help(chatId));
-            return true;
+            return send(CHAT_MESSAGES.help(String(chatId), CHAT_GPT_MODEL));
         }
         case Commands.TEST: {
-            await testBot(msg, bot);
-
-            return true;
+            return await testBot(chatMessage, bot);
         }
         default: {
             return false;
@@ -115,7 +138,7 @@ const handleCommand = async (msg: TelegramBot.Message) => {
     }
 }
 
-const handleMessage = async (msg: TelegramBot.Message) => {
+const handleMessage = async (chatMessage: TelegramBot.Message) => {
     const {
         chat: {
             id: chatId,
@@ -123,24 +146,22 @@ const handleMessage = async (msg: TelegramBot.Message) => {
         },
         message_id: messageId,
         text: messageText
-    } = msg;
+    } = chatMessage;
 
     if (! messageText) return;
 
-    if (["group", "supergroup"].includes(chatType)) {
-        if (! messageText.startsWith(`@${botName}`)) {
-            await handleCommand(msg)
-            return;
-        }
+    if (["group", "supergroup"].includes(chatType) && ! isBotNameMessage(messageText, botName)) {
+        await handleCommand(chatMessage);
+        return;
     }
 
-    if (await handleCommand(msg)) return;
+    if (await handleCommand(chatMessage)) return;
 
-    const message = messageText.replace(`@${botName}`, "").trim()
+    const trimmedText = trimMessage(botName, messageText);
 
-    if (message === "") return;
+    if (trimmedText === "") return;
 
-    log(LOG_MESSAGES.from(chatId), message);
+    log(LOG_MESSAGES.from(String(chatId)), trimmedText);
 
     let respMsg: TelegramBot.Message;
 
@@ -149,38 +170,52 @@ const handleMessage = async (msg: TelegramBot.Message) => {
             reply_to_message_id: messageId,
         });
 
-        bot.sendChatAction(chatId, CHAT_MESSAGES.typing);
+        bot.sendChatAction(chatId, TelegramActions.TYPING);
     }
     catch (err) {
-        log(LOG_MESSAGES.tele, err.message);
+        log(LOG_MESSAGES.telegramError, err.message);
         return;
     }
 
-    if (CHAT_ID_VERIFICATION && CHAT_ID !== chatId) {
+    if (CHAT_ID_VERIFICATION && CHAT_ID !== String(chatId)) {
         bot.sendMessage(chatId, CHAT_MESSAGES.wrongChatId)
         return;
     }
 
     try {
-        const response: ChatMessage = await chatGPTAPI.sendMessage(message, {
-            conversationId: conversationID,
-            parentMessageId: parentMessageID,
-            onProgress: _.throttle(async ({ text }: ChatMessage) => {
-                respMsg = await editMessage(respMsg, text, false);
-                bot.sendChatAction(chatId, CHAT_MESSAGES.typing);
-            }, THROTTLE_DELAY, { leading: true, trailing: false }),
+        const response: ChatMessage = await chatGPTAPI.sendMessage(trimmedText, {
+            ...(conversationId && parentMessageId && {
+                conversationId,
+                parentMessageId,
+            }),
+            onProgress: throttle(async ({ text }: ChatMessage) => {
+                    respMsg = await editMessage({
+                        chatMessage: respMsg,
+                        text: text
+                    });
+
+                    bot.sendChatAction(chatId, TelegramActions.TYPING);
+                },
+                THROTTLE_DELAY,
+                {
+                    leading: true,
+                    trailing: false
+                }
+            ),
         });
 
-        conversationID = response.conversationId;
-        parentMessageID = response.id;
+        conversationId = response?.conversationId || null;
+        parentMessageId = response?.id || null;
 
-        await editMessage(respMsg, response.text);
+        await editMessage({
+            chatMessage: respMsg,
+            text: response.text,
+            withParsing: true
+        });
 
         log(LOG_MESSAGES.response, response);
     }
-    catch (err) {
-        const { message } = err;
-
+    catch ({ message }) {
         log(LOG_MESSAGES.error, message);
 
         bot.sendMessage(chatId, message.includes("session token may have expired")
